@@ -6,19 +6,19 @@
 class Beatmap {
   private:
     int BeatmapID;
+    int NoteCount;
     int BeatCount;
-    int BPM;
     int Duration;
     Beat* beats;
   public:
     Beatmap();
-    Beatmap(int beatmapID, int beatCount, int bpm, int duration, Beat* beats);
+    Beatmap(int beatmapID, int beatCount, int duration, Beat* beats);
     int getBeatmapID();
     int getBeatCount();
-    int getBPM();
+    int getNoteCount();
     int getDuration();
+    void resetBeats();
     Beat* getBeats();
-    bool isInitialized();
 };
 
 #endif

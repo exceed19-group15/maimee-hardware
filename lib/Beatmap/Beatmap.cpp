@@ -3,17 +3,23 @@
 Beatmap::Beatmap() {
   this->BeatmapID = -1;
   this->BeatCount = -1;
-  this->BPM = -1;
+  this->NoteCount = -1;
   this->Duration = -1;
   this->beats = nullptr;
 }
 
-Beatmap::Beatmap(int beatmapID, int beatCount, int bpm, int duration, Beat* beats) {
+Beatmap::Beatmap(int beatmapID, int beatCount, int duration, Beat* beats) {
   this->BeatmapID = beatmapID;
   this->BeatCount = beatCount;
-  this->BPM = bpm;
+  this->NoteCount = 0;
   this->Duration = duration;
   this->beats = beats;
+
+  for (int i = 0; i < beatCount; i++) {
+    if (beats[i].getPadNum() != -1) {
+      this->NoteCount++;
+    }
+  }
 }
 
 int Beatmap::getBeatmapID() {
@@ -24,8 +30,8 @@ int Beatmap::getBeatCount() {
   return this->BeatCount;
 }
 
-int Beatmap::getBPM() {
-  return this->BPM;
+int Beatmap::getNoteCount() {
+  return this->NoteCount;
 }
 
 int Beatmap::getDuration() {
@@ -36,6 +42,8 @@ Beat* Beatmap::getBeats() {
   return this->beats;
 }
 
-bool Beatmap::isInitialized() {
-  return this->BeatmapID != -1 && this->BeatCount != -1 && this->BPM != -1 && this->Duration != -1 && this->beats != nullptr;
+void Beatmap::resetBeats() {
+  for (int i = 0; i < this->BeatCount; i++) {
+    this->beats[i].setHit(false);
+  }
 }

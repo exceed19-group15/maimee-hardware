@@ -19,101 +19,251 @@
 
 #define HIT_OFFSET 600
 
-Beat mockBeats[16] = {
+Beat beats1[17] = {
+    Beat(-1, 0, 261),
     Beat(0, 1000, 261),
-    Beat(1, 2000, 261),
+    Beat(1, 2000, 392),
     Beat(2, 3000, 392),
-    Beat(3, 4000, 392),
+    Beat(3, 4000, 440),
     Beat(0, 5000, 440),
-    Beat(1, 6000, 440),
-    Beat(2, 7000, 392),
-    Beat(-1, 8000, 392),
-
+    Beat(1, 6000, 392),
+    Beat(2, 7000, 0),
+    Beat(-1, 8000, 349),
     Beat(3, 9000, 349),
-    Beat(0, 10000, 349),
+    Beat(0, 10000, 329),
     Beat(1, 11000, 329),
-    Beat(2, 12000, 329),
+    Beat(2, 12000, 293),
     Beat(3, 13000, 293),
-    Beat(0, 14000, 293),
-    Beat(1, 15000, 261),
+    Beat(0, 14000, 261),
+    Beat(1, 15000, 0),
+    Beat(-1, 16000, 0)};
 
-    Beat(-1, 16000, 0)
-};
+Beatmap beatmap1 = Beatmap(1, 17, 16000, beats1);
 
-Beatmap MockBeatmap = Beatmap(0, 16, 0, 16000, mockBeats);
+const String BASE_URL = "https://ecourse.cpe.ku.ac.th/exceed15";
 
-const String BASE_URL = "http://group15.exceed19.online" ;
+String currentState = "MENU";
+int beatmapID = -1;
+Beatmap currentBeatmap = Beatmap();
 
-// void fetchGameState(Game &game){
-//   DynamicJsonDocument document(2048);
-//   HTTPClient http;
-//   const String URL = BASE_URL + "/game-state/";
-//   http.begin(URL);
-//   int responseCode = http.GET();
-//   if (responseCode != 200) {
-//     Serial.println("Failed to fetch game state");
-//     return;
-//   }
-
-//   String payload = http.getString();
-//   deserializeJson(document, payload);
-
-//   if (game.getCurrentState() == "MENU" && document["state"] == "PLAYING") {
-//     startMillis = millis();
-//     game.setBeatmapID(document["beatmap_id"].as<int>());
-//   }
-//   game.setCurrentState(document["state"].as<String>());
-// }
-
-// void fetchBeatmap(Game &game) {
-//   DynamicJsonDocument document(2048);
-//   JsonArray beatsJson = document.createNestedArray("beats");
-
-//   HTTPClient http;
-//   const String URL = BASE_URL + "/beatmap/" + game.getBeatmapID() + "/";
-//   http.begin(URL);
-//   int responseCode = http.GET();
-//   if (responseCode != 200) {
-//     Serial.println("Failed to fetch beatmap");
-//     return;
-//   }
-
-//   String payload = http.getString();
-//   deserializeJson(document, payload);
-
-//   Beat *beats = new Beat[beatsJson.size()];
-//   beatsJson = document["beats"].as<JsonArray>();
-//   beats = new Beat[beatsJson.size()];
-
-
-//   for (int i = 0; i < beatsJson.size(); i++) {
-//     beats[i] = Beat(
-//       beatsJson[i]["padNum"].as<int>(),
-//       beatsJson[i]["timestamp"].as<int>(),
-//       beatsJson[i]["duration"].as<int>()
-//     );
-//   }
-
-//   Beatmap beatmap = Beatmap(
-//     document["beatmapId"].as<int>(),
-//     document["beatCount"].as<int>(),
-//     document["bpm"].as<int>(),
-//     document["duration"].as<int>(),
-//     beats
-//   );
-
-//   game.setBeatmap(beatmap);
-// }
-
-
-unsigned long score = 0;
-int hitCount = 0;
-
-int currentBeat = 0;
 unsigned long startMillis = 0;
+unsigned long lastGameStateFetch = 0;
+int hitCount = 0;
+int currentBeat = 0;
+
+void POST_final_score(int beatmap_id, int score, int hit, int miss)
+{
+  HTTPClient http;
+  String URL = BASE_URL + "/game-state/";
+  http.begin(URL);
+  http.addHeader("Content-Type", "application/json");
+  String payload = "{\"game_state\": \"FINISHED\", \"beatmap_id\": " + String(beatmap_id) + "}";
+  int responseCode = http.POST(payload);
+  if (responseCode != 200)
+  {
+    Serial.println("Failed to post final score");
+  }
+
+  URL = BASE_URL + "/recent/";
+  http.begin(URL);
+  http.addHeader("Content-Type", "application/json");
+  payload = "{\"beatmap_id\": " + String(beatmap_id) + ", \"score\": " + String(score) + ", \"hit\": " + String(hit) + ", \"miss\": " + String(miss) + "}";
+  responseCode = http.POST(payload);
+  if (responseCode != 200)
+  {
+    Serial.println("Failed to post final score");
+  }
+}
+
+TaskHandle_t TaskGame = NULL;
+TaskHandle_t TaskUpdate = NULL;
+
+void fetchGameState()
+{
+  DynamicJsonDocument document(2048);
+  HTTPClient http;
+  const String URL = BASE_URL + "/game-state/";
+  http.begin(URL);
+  int responseCode = http.GET();
+  if (responseCode != 200)
+  {
+    Serial.println("Failed to fetch game state");
+    return;
+  }
+
+  String payload = http.getString();
+  deserializeJson(document, payload);
+
+  if (currentState == "MENU" && document["game_state"] == "PLAYING")
+  {
+    startMillis = millis();
+    Serial.println(startMillis);
+    beatmapID = document["beatmap_id"].as<int>();
+  }
+  currentState = document["game_state"].as<String>();
+  Serial.println(currentState); 
+}
+
+void gameLoop(void *param)
+{
+  while (1)
+  {
+    vTaskDelay(1);
+
+
+    if (currentState != "PLAYING")
+    {
+      continue;
+    }
+
+    unsigned long currentTimestamp = millis() - startMillis;
+
+    Beatmap *beatmap = &beatmap1;
+
+    bool redOn = false;
+    bool yellowOn = false;
+    bool greenOn = false;
+    bool blueOn = false;
+    bool hit = false;
+
+    if (currentTimestamp > beatmap->getDuration() && currentState == "PLAYING")
+    {
+      int score = (hitCount / (float)beatmap->getNoteCount()) * 100;
+      POST_final_score(beatmapID, score, hitCount, beatmap->getNoteCount() - hitCount);
+      currentState = "FINISHED";
+      beatmap->resetBeats();
+      currentBeat = 0;
+
+      Serial.println("Finished");
+      Serial.println("Score: " + score);
+      Serial.println("Hit: " + String(hitCount));
+      noTone(BUZZER);
+      digitalWrite(RED, LOW);
+      digitalWrite(YELLOW, LOW);
+      digitalWrite(GREEN, LOW);
+      digitalWrite(BLUE, LOW);
+      continue;
+    }
+
+    for (int i = currentBeat; i < beatmap->getBeatCount(); i++)
+    {
+      Beat *beat = beatmap->getBeats() + i;
+      unsigned int upperBound = beat->getTimestamp() + HIT_OFFSET;
+      unsigned int lowerBound = beat->getTimestamp() - HIT_OFFSET;
+
+      if (currentTimestamp > upperBound)
+      {
+        currentBeat++;
+        continue;
+      }
+
+      if (currentTimestamp >= beat->getTimestamp())
+      {
+        int freq = beat->getFrequency();
+        if (freq > 0)
+        {
+          tone(BUZZER, freq);
+        }
+        else
+        {
+          noTone(BUZZER);
+        }
+      }
+
+      if (beat->getPadNum() != -1 && currentTimestamp >= lowerBound && currentTimestamp <= upperBound && !beat->getHit())
+      {
+        switch (beat->getPadNum())
+        {
+        case 0:
+          if (digitalRead(RED_SWITCH) == HIGH)
+          {
+            beat->setHit(true);
+            hitCount++;
+            continue;
+          }
+          redOn = true;
+          break;
+        case 1:
+          if (digitalRead(YELLOW_SWITCH) == HIGH)
+          {
+            beat->setHit(true);
+            hitCount++;
+            continue;
+          }
+          yellowOn = true;
+          break;
+        case 2:
+          if (digitalRead(GREEN_SWITCH) == HIGH)
+          {
+            beat->setHit(true);
+            hitCount++;
+            continue;
+          }
+          greenOn = true;
+          break;
+        case 3:
+          if (digitalRead(BLUE_SWITCH) == HIGH)
+          {
+            beat->setHit(true);
+            hitCount++;
+            continue;
+          }
+          blueOn = true;
+          break;
+        }
+      }
+    }
+
+    if (redOn)
+    {
+      digitalWrite(RED, HIGH);
+    }
+    else
+    {
+      digitalWrite(RED, LOW);
+    }
+
+    if (yellowOn)
+    {
+      digitalWrite(YELLOW, HIGH);
+    }
+    else
+    {
+      digitalWrite(YELLOW, LOW);
+    }
+
+    if (greenOn)
+    {
+      digitalWrite(GREEN, HIGH);
+    }
+    else
+    {
+      digitalWrite(GREEN, LOW);
+    }
+
+    if (blueOn)
+    {
+      digitalWrite(BLUE, HIGH);
+    }
+    else
+    {
+      digitalWrite(BLUE, LOW);
+    }
+  }
+}
+
+void updateGameState(void *param)
+{
+  while (1)
+  {
+    fetchGameState();
+    vTaskDelay(300 / portTICK_PERIOD_MS);
+  }
+}
 
 void setup()
 {
+
   pinMode(RED, OUTPUT);
   pinMode(RED_SWITCH, INPUT);
   pinMode(YELLOW, OUTPUT);
@@ -123,138 +273,44 @@ void setup()
   pinMode(BLUE, OUTPUT);
   pinMode(BLUE_SWITCH, INPUT);
   pinMode(BUZZER, OUTPUT);
-  // pinMode(HIT_BUZZER, OUTPUT);
 
   noTone(BUZZER);
-  // noTone(HIT_BUZZER);
 
   Serial.begin(9600);
+
+  WiFi.mode(WIFI_STA);
+  WiFi.disconnect();
+
+  // WiFi.begin("group15", "thisisapassword");
+  WiFi.begin("TAGCH", "025123301");
+  Serial.print("Connecting to WiFi");
+  while (WiFi.status() != WL_CONNECTED)
+  {
+    delay(500);
+    Serial.print(".");
+  }
+  Serial.print("OK! IP=");
+  Serial.println(WiFi.localIP());
+
+  xTaskCreatePinnedToCore(
+      gameLoop,
+      "gameLoop",
+      10000,
+      NULL,
+      1,
+      &TaskGame,
+      0);
+
+  xTaskCreatePinnedToCore(
+      updateGameState,
+      "updateGameState",
+      10000,
+      NULL,
+      1,
+      &TaskUpdate,
+      1);
 }
 
 void loop()
 {
-  Beatmap *beatmap = &MockBeatmap;
-
-  bool redOn = false;
-  bool yellowOn = false;
-  bool greenOn = false;
-  bool blueOn = false;
-    bool hit = false;
-
-  unsigned long currentMillis = millis();
-  unsigned long currentTimestamp = currentMillis - startMillis;
-
-  if (currentTimestamp > beatmap->getDuration())
-  {
-    return;
-  }
-
-  for (int i = currentBeat; i < beatmap->getBeatCount(); i++)
-  {
-    Beat *beat = beatmap->getBeats() + i;
-    unsigned int upperBound = beat->getTimestamp() + HIT_OFFSET;
-    unsigned int lowerBound = beat->getTimestamp() - HIT_OFFSET;
-
-    if (currentTimestamp > upperBound)
-    {
-      currentBeat++;
-      continue;
-    }
-
-    if (currentTimestamp >= beat->getTimestamp()) {
-      int freq = beat->getFrequency();
-      if (freq > 0) {
-        tone(BUZZER, freq);
-      } else {
-        noTone(BUZZER);
-      }
-    }
-
-    if (currentTimestamp >= lowerBound && currentTimestamp <= upperBound && !beat->getHit())
-    {
-      switch (beat->getPadNum())
-      {
-      case 0:
-        if (digitalRead(RED_SWITCH) == HIGH)
-        {
-          beat->setHit(true);
-          hit = true;
-          continue;
-        }
-        redOn = true;
-        break;
-      case 1:
-        if (digitalRead(YELLOW_SWITCH) == HIGH)
-        {
-          beat->setHit(true);
-          hit = true;
-          continue;
-        }
-        yellowOn = true;
-        break;
-      case 2:
-        if (digitalRead(GREEN_SWITCH) == HIGH)
-        {
-          beat->setHit(true);
-          hit = true;
-          continue;
-        }
-        greenOn = true;
-        break;
-      case 3:
-        if (digitalRead(BLUE_SWITCH) == HIGH)
-        {
-          beat->setHit(true);
-          hit = true;
-          continue;
-        }
-        blueOn = true;
-        break;
-      }
-    }
-    if (hit)
-    {
-      hitCount++;
-      Serial.println(hitCount);
-    }
-
-  }
-
-  if (redOn)
-  {
-    digitalWrite(RED, HIGH);
-  }
-  else
-  {
-    digitalWrite(RED, LOW);
-  }
-
-  if (yellowOn)
-  {
-    digitalWrite(YELLOW, HIGH);
-  }
-  else
-  {
-    digitalWrite(YELLOW, LOW);
-  }
-
-  if (greenOn)
-  {
-    digitalWrite(GREEN, HIGH);
-  }
-  else
-  {
-    digitalWrite(GREEN, LOW);
-  }
-
-  if (blueOn)
-  {
-    digitalWrite(BLUE, HIGH);
-  }
-  else
-  {
-    digitalWrite(BLUE, LOW);
-  }
-
-
 }
