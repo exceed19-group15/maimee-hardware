@@ -6,16 +6,15 @@
 #include <Beat.h>
 #include <Beatmap.h>
 
-#define RED 21
+#define RED 18
 #define RED_SWITCH 23
 #define YELLOW 19
-#define YELLOW_SWITCH 22
+#define YELLOW_SWITCH 27
 #define GREEN 32
 #define GREEN_SWITCH 26
 #define BLUE 33
 #define BLUE_SWITCH 25
 #define BUZZER 12
-// #define HIT_BUZZER 13
 
 #define HIT_OFFSET 600
 
@@ -40,56 +39,63 @@ Beat beats1[17] = {
 
 Beatmap beatmap1 = Beatmap(1, 17, 16000, beats1);
 
-const String BASE_URL = "https://ecourse.cpe.ku.ac.th/exceed15";
+// const String BASE_URL = "https://ecourse.cpe.ku.ac.th/exceed15";
+const String BASE_URL = "http://group15.exceed19.online";
 
 String currentState = "MENU";
 String nextState = "MENU";
 int beatmapID = -1;
 Beatmap currentBeatmap = Beatmap();
 
-unsigned long startMillis = 0;
+long startMillis = 0;
 unsigned long lastGameStateFetch = 0;
 int hitCount = 0;
 int currentBeat = 0;
 
-void POST_final_score(int beatmap_id, int score, int hit, int miss)
+bool POST_final_score(int beatmap_id, int score, int hit, int miss)
 {
   HTTPClient http;
-  String URL = BASE_URL + "/game-state/";
+  String URL = BASE_URL + "/recent";
   http.begin(URL);
   http.addHeader("Content-Type", "application/json");
-  String payload = "{\"game_state\": \"FINISHED\", \"beatmap_id\": " + String(beatmap_id) + "}";
+  String payload = "{\"beatmap_id\": " + String(beatmap_id) + ", \"score\": " + String(score) + ", \"hit\": " + String(hit) + ", \"miss\": " + String(miss) + "}";
+
   int responseCode = http.POST(payload);
   if (responseCode != 200)
   {
     Serial.println("Failed to post final score");
+    return false;
   }
 
-  URL = BASE_URL + "/recent/";
+   URL = BASE_URL + "/game-state";
   http.begin(URL);
   http.addHeader("Content-Type", "application/json");
-  payload = "{\"beatmap_id\": " + String(beatmap_id) + ", \"score\": " + String(score) + ", \"hit\": " + String(hit) + ", \"miss\": " + String(miss) + "}";
-  responseCode = http.POST(payload);
+   payload = "{\"game_state\": \"FINISHED\", \"beatmap_id\": " + String(beatmap_id) + "}";
+   responseCode = http.POST(payload);
   if (responseCode != 200)
   {
-    Serial.println("Failed to post final score");
+    Serial.println("Failed to update to finished state");
+    return false;
   }
+
+  return true;
 }
 
 TaskHandle_t TaskGame = NULL;
 TaskHandle_t TaskUpdate = NULL;
 
-void fetchGameState(String &nextState)
+bool GET_game_state(String &nextState)
 {
   DynamicJsonDocument document(2048);
   HTTPClient http;
-  const String URL = BASE_URL + "/game-state/";
+  const String URL = BASE_URL + "/game-state";
   http.begin(URL);
   int responseCode = http.GET();
   if (responseCode != 200)
   {
     Serial.println("Failed to fetch game state");
-    return;
+    Serial.println("Response code: " + String(responseCode));
+    return false;
   }
 
   String payload = http.getString();
@@ -100,7 +106,10 @@ void fetchGameState(String &nextState)
   {
     beatmapID = document["beatmap_id"].as<int>();
   }
+  return true;
 }
+
+Beatmap *beatmap = &beatmap1;
 
 void gameLoop(void *param)
 {
@@ -108,7 +117,6 @@ void gameLoop(void *param)
   {
     vTaskDelay(1);
 
-    unsigned long currentTimestamp = millis() - startMillis;
 
 
     if (currentState != "PLAYING")
@@ -117,7 +125,6 @@ void gameLoop(void *param)
     }
 
 
-    Beatmap *beatmap = &beatmap1;
 
     bool redOn = false;
     bool yellowOn = false;
@@ -125,12 +132,15 @@ void gameLoop(void *param)
     bool blueOn = false;
     bool hit = false;
 
-    if (currentTimestamp > beatmap->getDuration() && currentState == "PLAYING")
+    long currentTimestamp = millis() - startMillis;
+
+
+    if (currentTimestamp > beatmap->getDuration())
     {
+      Serial.println(currentTimestamp);
       int score = (hitCount / (float)beatmap->getNoteCount()) * 100;
       POST_final_score(beatmapID, score, hitCount, beatmap->getNoteCount() - hitCount);
       nextState = "FINISHED";
-      currentState = "FINISHED";
       Serial.println("Finished");
       Serial.println("Hit: " + String(hitCount));
       continue;
@@ -247,30 +257,31 @@ void updateGameState(void *param)
 {
   while (1)
   {
-    fetchGameState(nextState);
+    if (!GET_game_state(nextState))
+    {
+      continue;
+    }
     if (currentState != nextState)
     {
-      currentState = nextState;
-      Serial.println("State changed to " + currentState);
-      if (currentState == "PLAYING")
+      if (nextState == "PLAYING")
       {
         startMillis = millis();
         hitCount = 0;
         currentBeat = 0;
         beatmap1.resetBeats();
 
-      }
-
-      if (currentState == "FINISHED")
-      {
+      } else
+    {
         noTone(BUZZER);
         digitalWrite(RED, LOW);
         digitalWrite(YELLOW, LOW);
         digitalWrite(GREEN, LOW);
         digitalWrite(BLUE, LOW);
-      }
     }
-    vTaskDelay(300 / portTICK_PERIOD_MS);
+      currentState = nextState;
+      Serial.println("State changed to " + currentState);
+    }
+    vTaskDelay(500 / portTICK_PERIOD_MS);
   }
 }
 
