@@ -43,6 +43,7 @@ Beatmap beatmap1 = Beatmap(1, 17, 16000, beats1);
 const String BASE_URL = "https://ecourse.cpe.ku.ac.th/exceed15";
 
 String currentState = "MENU";
+String nextState = "MENU";
 int beatmapID = -1;
 Beatmap currentBeatmap = Beatmap();
 
@@ -78,7 +79,7 @@ void POST_final_score(int beatmap_id, int score, int hit, int miss)
 TaskHandle_t TaskGame = NULL;
 TaskHandle_t TaskUpdate = NULL;
 
-void fetchGameState()
+void fetchGameState(String &nextState)
 {
   DynamicJsonDocument document(2048);
   HTTPClient http;
@@ -94,14 +95,11 @@ void fetchGameState()
   String payload = http.getString();
   deserializeJson(document, payload);
 
-  if (currentState == "MENU" && document["game_state"] == "PLAYING")
+  nextState = document["game_state"].as<String>();
+  if (nextState == "PLAYING")
   {
-    startMillis = millis();
-    Serial.println(startMillis);
     beatmapID = document["beatmap_id"].as<int>();
   }
-  currentState = document["game_state"].as<String>();
-  Serial.println(currentState); 
 }
 
 void gameLoop(void *param)
@@ -110,13 +108,14 @@ void gameLoop(void *param)
   {
     vTaskDelay(1);
 
+    unsigned long currentTimestamp = millis() - startMillis;
+
 
     if (currentState != "PLAYING")
     {
       continue;
     }
 
-    unsigned long currentTimestamp = millis() - startMillis;
 
     Beatmap *beatmap = &beatmap1;
 
@@ -130,18 +129,10 @@ void gameLoop(void *param)
     {
       int score = (hitCount / (float)beatmap->getNoteCount()) * 100;
       POST_final_score(beatmapID, score, hitCount, beatmap->getNoteCount() - hitCount);
+      nextState = "FINISHED";
       currentState = "FINISHED";
-      beatmap->resetBeats();
-      currentBeat = 0;
-
       Serial.println("Finished");
-      Serial.println("Score: " + score);
       Serial.println("Hit: " + String(hitCount));
-      noTone(BUZZER);
-      digitalWrite(RED, LOW);
-      digitalWrite(YELLOW, LOW);
-      digitalWrite(GREEN, LOW);
-      digitalWrite(BLUE, LOW);
       continue;
     }
 
@@ -256,7 +247,29 @@ void updateGameState(void *param)
 {
   while (1)
   {
-    fetchGameState();
+    fetchGameState(nextState);
+    if (currentState != nextState)
+    {
+      currentState = nextState;
+      Serial.println("State changed to " + currentState);
+      if (currentState == "PLAYING")
+      {
+        startMillis = millis();
+        hitCount = 0;
+        currentBeat = 0;
+        beatmap1.resetBeats();
+
+      }
+
+      if (currentState == "FINISHED")
+      {
+        noTone(BUZZER);
+        digitalWrite(RED, LOW);
+        digitalWrite(YELLOW, LOW);
+        digitalWrite(GREEN, LOW);
+        digitalWrite(BLUE, LOW);
+      }
+    }
     vTaskDelay(300 / portTICK_PERIOD_MS);
   }
 }
@@ -281,8 +294,8 @@ void setup()
   WiFi.mode(WIFI_STA);
   WiFi.disconnect();
 
-  // WiFi.begin("group15", "thisisapassword");
-  WiFi.begin("TAGCH", "025123301");
+  WiFi.begin("group15", "thisisapassword");
+  // WiFi.begin("TAGCH", "025123301");
   Serial.print("Connecting to WiFi");
   while (WiFi.status() != WL_CONNECTED)
   {
