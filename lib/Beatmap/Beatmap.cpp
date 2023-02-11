@@ -8,8 +8,9 @@ Beatmap::Beatmap() {
   this->beats = nullptr;
 }
 
-Beatmap::Beatmap(int beatmapID, int beatCount, int duration, Beat* beats) {
+Beatmap::Beatmap(int beatmapID, String songName, int beatCount, int duration, Beat* beats) {
   this->BeatmapID = beatmapID;
+  this->songName = songName;
   this->BeatCount = beatCount;
   this->NoteCount = 0;
   this->Duration = duration;
@@ -24,6 +25,10 @@ Beatmap::Beatmap(int beatmapID, int beatCount, int duration, Beat* beats) {
 
 int Beatmap::getBeatmapID() {
   return this->BeatmapID;
+}
+
+String Beatmap::getSongName() {
+  return this->songName;
 }
 
 int Beatmap::getBeatCount() {

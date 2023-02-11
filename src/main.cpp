@@ -3,6 +3,9 @@
 #include <HTTPClient.h>
 #include <ArduinoJson.h>
 
+#include <Wire.h>
+#include <LiquidCrystal_I2C.h>
+
 #include <Beat.h>
 #include <Beatmap.h>
 
@@ -17,6 +20,8 @@
 #define BUZZER 12
 
 #define HIT_OFFSET 600
+
+LiquidCrystal_I2C lcd(0x27, 16, 2);
 
 Beat beats1[17] = {
     Beat(-1, 0, 261),
@@ -35,9 +40,10 @@ Beat beats1[17] = {
     Beat(3, 13000, 293),
     Beat(0, 14000, 261),
     Beat(1, 15000, 0),
-    Beat(-1, 16000, 0)};
+    Beat(-1, 16000, 0)
+};
 
-Beatmap beatmap1 = Beatmap(1, 17, 16000, beats1);
+Beatmap beatmap1 = Beatmap(0, "Twinkle Twinkle", 17, 16000, beats1);
 
 // const String BASE_URL = "https://ecourse.cpe.ku.ac.th/exceed15";
 const String BASE_URL = "http://group15.exceed19.online";
@@ -51,6 +57,7 @@ long startMillis = 0;
 unsigned long lastGameStateFetch = 0;
 int hitCount = 0;
 int currentBeat = 0;
+bool updateLCD = false;
 
 bool POST_final_score(int beatmap_id, int score, int hit, int miss)
 {
@@ -67,11 +74,11 @@ bool POST_final_score(int beatmap_id, int score, int hit, int miss)
     return false;
   }
 
-   URL = BASE_URL + "/game-state";
+  URL = BASE_URL + "/game-state";
   http.begin(URL);
   http.addHeader("Content-Type", "application/json");
-   payload = "{\"game_state\": \"FINISHED\", \"beatmap_id\": " + String(beatmap_id) + "}";
-   responseCode = http.POST(payload);
+  payload = "{\"game_state\": \"FINISHED\", \"beatmap_id\": " + String(beatmap_id) + "}";
+  responseCode = http.POST(payload);
   if (responseCode != 200)
   {
     Serial.println("Failed to update to finished state");
@@ -81,8 +88,6 @@ bool POST_final_score(int beatmap_id, int score, int hit, int miss)
   return true;
 }
 
-TaskHandle_t TaskGame = NULL;
-TaskHandle_t TaskUpdate = NULL;
 
 bool GET_game_state(String &nextState)
 {
@@ -109,7 +114,53 @@ bool GET_game_state(String &nextState)
   return true;
 }
 
+void setup_LCD()
+{
+  lcd.init();
+  lcd.backlight();
+}
+
+void LCD_showMenu()
+{
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("     maimee");
+  lcd.setCursor(0, 1);
+  lcd.print(" Choose a song");
+}
+
+void LCD_showScore(String songName, int hitCount, int noteCount)
+{
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print(songName);
+  lcd.setCursor(0, 1);
+  lcd.print("HIT: " + String(hitCount) + "/" + String(noteCount));
+}
+
 Beatmap *beatmap = &beatmap1;
+
+void LCD_update() {
+    if (updateLCD)
+    {
+
+      if (currentState == "MENU")
+      {
+        LCD_showMenu();
+      }
+      else if (currentState == "PLAYING" || currentState == "FINISHED")
+      {
+        LCD_showScore(beatmap->getSongName(), hitCount, beatmap->getNoteCount());
+      }
+      else if (currentState == "GIVEUP")
+      {
+        lcd.clear();
+        lcd.setCursor(0, 0);
+        lcd.print("YOU SUCK");
+      }
+    }
+    updateLCD = false;
+}
 
 void gameLoop(void *param)
 {
@@ -117,23 +168,19 @@ void gameLoop(void *param)
   {
     vTaskDelay(1);
 
-
+    LCD_update();
 
     if (currentState != "PLAYING")
     {
       continue;
     }
 
-
-
     bool redOn = false;
     bool yellowOn = false;
     bool greenOn = false;
     bool blueOn = false;
-    bool hit = false;
 
     long currentTimestamp = millis() - startMillis;
-
 
     if (currentTimestamp > beatmap->getDuration())
     {
@@ -180,6 +227,7 @@ void gameLoop(void *param)
           {
             beat->setHit(true);
             hitCount++;
+            updateLCD = true;
             continue;
           }
           redOn = true;
@@ -189,6 +237,7 @@ void gameLoop(void *param)
           {
             beat->setHit(true);
             hitCount++;
+            updateLCD = true;
             continue;
           }
           yellowOn = true;
@@ -198,6 +247,7 @@ void gameLoop(void *param)
           {
             beat->setHit(true);
             hitCount++;
+            updateLCD = true;
             continue;
           }
           greenOn = true;
@@ -207,6 +257,7 @@ void gameLoop(void *param)
           {
             beat->setHit(true);
             hitCount++;
+            updateLCD = true;
             continue;
           }
           blueOn = true;
@@ -253,6 +304,7 @@ void gameLoop(void *param)
   }
 }
 
+
 void updateGameState(void *param)
 {
   while (1)
@@ -263,27 +315,31 @@ void updateGameState(void *param)
     }
     if (currentState != nextState)
     {
+      updateLCD = true;
       if (nextState == "PLAYING")
       {
         startMillis = millis();
         hitCount = 0;
         currentBeat = 0;
         beatmap1.resetBeats();
-
-      } else
-    {
+      }
+      else
+      {
         noTone(BUZZER);
         digitalWrite(RED, LOW);
         digitalWrite(YELLOW, LOW);
         digitalWrite(GREEN, LOW);
         digitalWrite(BLUE, LOW);
-    }
+      }
       currentState = nextState;
       Serial.println("State changed to " + currentState);
     }
     vTaskDelay(500 / portTICK_PERIOD_MS);
   }
 }
+
+TaskHandle_t TaskGame = NULL;
+TaskHandle_t TaskUpdate = NULL;
 
 void setup()
 {
@@ -297,6 +353,8 @@ void setup()
   pinMode(BLUE, OUTPUT);
   pinMode(BLUE_SWITCH, INPUT);
   pinMode(BUZZER, OUTPUT);
+
+  setup_LCD();
 
   noTone(BUZZER);
 
