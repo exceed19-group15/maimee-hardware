@@ -49,6 +49,10 @@ Beat* Beatmap::getBeats() {
   return this->beats;
 }
 
+int Beatmap::getLightShowTime() {
+  return this->lightShowTime;
+}
+
 void Beatmap::resetBeats() {
   for (int i = 0; i < this->BeatCount; i++) {
     this->beats[i].setHit(false);

@@ -21,7 +21,7 @@ class Beatmap {
     int getBeatCount();
     int getNoteCount();
     int getDuration();
-    int getlightShowTime();
+    int getLightShowTime();
     void resetBeats();
     Beat* getBeats();
 };

@@ -21,6 +21,6 @@ Beat BEATS_0[17] = {
     Beat(-1, 16000, 0,0)
 };
 
-Beatmap BEATMAP_0 =Beatmap(0, "Twinkle Twinkle", 17, 16000, 1000, BEATS_0);
+Beatmap BEATMAP_0 =Beatmap(0, "Twinkle Twinkle", 17, 16000, 1200, BEATS_0);
 
-Beatmap *BEATMAPS = {&BEATMAP_0};
+Beatmap *BEATMAPS[6] = {&BEATMAP_0,&BEATMAP_0,&BEATMAP_0,&BEATMAP_0,&BEATMAP_0,&BEATMAP_0};

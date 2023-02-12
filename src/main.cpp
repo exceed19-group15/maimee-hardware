@@ -5,11 +5,9 @@
 #include <Beatmap.h>
 #include <LiquidCrystal_I2C.h>
 
-#include <HTTPClient.h>
-#include <ArduinoJson.h>
-
 #include <LCEEDEE.h>
 #include <beatmaps.h>
+#include <requests.h>
 
 #define RED 18
 #define RED_SWITCH 23
@@ -21,7 +19,6 @@
 #define BLUE_SWITCH 25
 #define BUZZER 12
 
-#define HIT_OFFSET 600
 
 LiquidCrystal_I2C lcd(0x27, 16, 2);
 
@@ -31,69 +28,17 @@ int beatmapID = -1;
 long startMillis = 0;
 unsigned long lastGameStateFetch = 0;
 int hitCount = 0;
+int hitOffset = 600;
 
 Beatmap *currentBeatmap = nullptr;
 int currentBeat = 0;
 bool updateLCD = false;
 
-
-// const String BASE_URL = "https://ecourse.cpe.ku.ac.th/exceed15";
-const String BASE_URL = "http://group15.exceed19.online";
-
-bool POST_final_score(int beatmap_id, int score, int hit, int miss)
-{
-  HTTPClient http;
-  String URL = BASE_URL + "/recent";
-  http.begin(URL);
-  http.addHeader("Content-Type", "application/json");
-  String payload = "{\"beatmap_id\": " + String(beatmap_id) + ", \"score\": " + String(score) + ", \"hit\": " + String(hit) + ", \"miss\": " + String(miss) + "}";
-
-  int responseCode = http.POST(payload);
-  if (responseCode != 200)
-  {
-    Serial.println("Failed to post final score");
-    return false;
-  }
-
-  URL = BASE_URL + "/game-state";
-  http.begin(URL);
-  http.addHeader("Content-Type", "application/json");
-  payload = "{\"game_state\": \"FINISHED\", \"beatmap_id\": " + String(beatmap_id) + "}";
-  responseCode = http.POST(payload);
-  if (responseCode != 200)
-  {
-    Serial.println("Failed to update to finished state");
-    return false;
-  }
-
-  return true;
-}
+long lastToneChange = 0;
+int lastTone = 0;
 
 
-bool GET_game_state(String &nextState, int &beatmapID)
-{
-  DynamicJsonDocument document(2048);
-  HTTPClient http;
-  const String URL = BASE_URL + "/game-state";
-  http.begin(URL);
-  int responseCode = http.GET();
-  if (responseCode != 200)
-  {
-    Serial.println("Failed to fetch game state");
-    Serial.println("Response code: " + String(responseCode));
-    return false;
-  }
 
-  String payload = http.getString();
-  deserializeJson(document, payload);
-
-  nextState = document["game_state"].as<String>();
-  if (nextState == "PLAYING")
-  {
-    beatmapID = document["beatmap_id"].as<int>();
-  }
-  return true;
-}
 
 
 void LCD_update() {
@@ -156,8 +101,8 @@ void gameLoop(void *param)
     for (int i = currentBeat; i < currentBeatmap->getBeatCount(); i++)
     {
       Beat *beat = currentBeatmap->getBeats() + i;
-      unsigned int upperBound = beat->getTimestamp() + HIT_OFFSET;
-      unsigned int lowerBound = beat->getTimestamp() - HIT_OFFSET;
+      unsigned int upperBound = beat->getTimestamp() + hitOffset;
+      unsigned int lowerBound = beat->getTimestamp() - hitOffset;
 
       if (currentTimestamp > upperBound)
       {
@@ -281,8 +226,9 @@ void updateGameState(void *param)
         startMillis = millis();
         hitCount = 0;
         currentBeat = 0;
-        currentBeatmap = &BEATMAPS[beatmapID];
+        currentBeatmap = BEATMAPS[beatmapID];
         currentBeatmap->resetBeats(); 
+        hitOffset = (currentBeatmap->getLightShowTime()/2);
       }
       else
       {
@@ -323,7 +269,8 @@ void setup()
 
   WiFi.mode(WIFI_STA);
 
-  WiFi.begin("group15", "thisisapassword");
+  // WiFi.begin("group15", "thisisapassword");
+  WiFi.begin("GTS 20", "Supakrit");
   // WiFi.begin("TAGCH", "025123301");
   Serial.print("Connecting to WiFi");
   while (WiFi.status() != WL_CONNECTED)
