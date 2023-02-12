@@ -297,7 +297,7 @@ void updateGameState(void *param)
         startMillis = millis();
         hitCount = 0;
         currentBeat = 0;
-        currentBeatmap = &beatmaps[beatmapID - 1];
+        currentBeatmap = &beatmaps[beatmapID];
         currentBeatmap->resetBeats(); 
       }
       else
