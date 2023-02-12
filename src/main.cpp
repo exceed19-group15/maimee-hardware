@@ -103,15 +103,19 @@ void gameLoop(void *param)
       unsigned int upperBound = beat->getTimestamp() + hitOffset;
       unsigned int lowerBound = beat->getTimestamp() - hitOffset;
 
-      if (lastTone == beat->getFrequency() && currentMillis - lastToneChange > beat->getDuration())
+      if (lastTone == beat->getFrequency() && currentMillis - lastToneChange >= beat->getDuration() && beat->getFrequency() > 0 && lastTone > 0)
       {
+        Serial.println("No tone");
         noTone(BUZZER);
         lastTone = 0;
+        lastToneChange = currentMillis;
       }
 
       if (currentTimestamp >= beat->getTimestamp() && lastTone != beat->getFrequency())
       {
         int freq = beat->getFrequency();
+        lastToneChange = currentMillis;
+        Serial.println("Tone: " + String(freq));
         lastTone = freq;
         if (freq > 0)
         {
