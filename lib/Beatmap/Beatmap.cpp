@@ -8,12 +8,14 @@ Beatmap::Beatmap() {
   this->beats = nullptr;
 }
 
-Beatmap::Beatmap(int beatmapID, String songName, int beatCount, int duration, Beat* beats) {
+Beatmap::Beatmap(int beatmapID, String songName, int beatCount, int duration,int lightShowTime, Beat* beats) {
   this->BeatmapID = beatmapID;
   this->songName = songName;
   this->BeatCount = beatCount;
   this->NoteCount = 0;
   this->Duration = duration;
+  this->lightShowTime = lightShowTime;
+
   this->beats = beats;
 
   for (int i = 0; i < beatCount; i++) {

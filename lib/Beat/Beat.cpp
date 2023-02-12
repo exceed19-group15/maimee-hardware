@@ -1,5 +1,4 @@
 #include "Beat.h"
-
 Beat::Beat() {
   this->padNum = -1;
   this->timestamp = -1;
@@ -9,10 +8,12 @@ Beat::Beat() {
 
 
 
-Beat::Beat(int padNum, int timestamp, int frequency) {
+Beat::Beat(int padNum, int timestamp, int frequency, int duration) {
   this->padNum = padNum;
   this->timestamp = timestamp;
   this->frequency = frequency;
+  this->duration = duration;
+
   this->hit = false;
 }
 
@@ -36,6 +37,7 @@ bool Beat::getHit() {
   return this->hit;
 }
 
-bool Beat::isInitialized() {
-  return this->padNum != -1 && this->timestamp != -1 && this->frequency != -1;
+
+int Beat::getDuration() {
+  return this->duration;
 }
