@@ -37,10 +37,6 @@ bool updateLCD = false;
 long lastToneChange = 0;
 int lastTone = 0;
 
-
-
-
-
 void LCD_update() {
     if (updateLCD)
     {
@@ -85,7 +81,8 @@ void gameLoop(void *param)
     bool greenOn = false;
     bool blueOn = false;
 
-    long currentTimestamp = millis() - startMillis;
+    long currentMillis = millis();
+    long currentTimestamp = currentMillis - startMillis;
 
     if (currentTimestamp > currentBeatmap->getDuration())
     {
@@ -98,21 +95,24 @@ void gameLoop(void *param)
       continue;
     }
 
+
+
     for (int i = currentBeat; i < currentBeatmap->getBeatCount(); i++)
     {
       Beat *beat = currentBeatmap->getBeats() + i;
       unsigned int upperBound = beat->getTimestamp() + hitOffset;
       unsigned int lowerBound = beat->getTimestamp() - hitOffset;
 
-      if (currentTimestamp > upperBound)
+      if (lastTone == beat->getFrequency() && currentMillis - lastToneChange > beat->getDuration())
       {
-        currentBeat++;
-        continue;
+        noTone(BUZZER);
+        lastTone = 0;
       }
 
-      if (currentTimestamp >= beat->getTimestamp())
+      if (currentTimestamp >= beat->getTimestamp() && lastTone != beat->getFrequency())
       {
         int freq = beat->getFrequency();
+        lastTone = freq;
         if (freq > 0)
         {
           tone(BUZZER, freq);
@@ -122,6 +122,13 @@ void gameLoop(void *param)
           noTone(BUZZER);
         }
       }
+
+      if (currentTimestamp > upperBound)
+      {
+        currentBeat++;
+        continue;
+      }
+
 
       if (beat->getPadNum() != -1 && currentTimestamp >= lowerBound && currentTimestamp <= upperBound && !beat->getHit())
       {
