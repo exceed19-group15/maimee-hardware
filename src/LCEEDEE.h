@@ -1,6 +1,7 @@
 #include <Wire.h>
 #include <LiquidCrystal_I2C.h>
 
+
 void LCD_setup(LiquidCrystal_I2C *lcd)
 {
   lcd->init();

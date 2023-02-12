@@ -1,13 +1,12 @@
 #include <Arduino.h>
 #include <WiFi.h>
-#include <HTTPClient.h>
-#include <ArduinoJson.h>
 
+#include <LCEEDEE.h>
+#include <requests.h>
 
 #include <Beat.h>
 #include <Beatmap.h>
 #include <LiquidCrystal_I2C.h>
-#include <LCEEDEE.h>
 
 #define RED 18
 #define RED_SWITCH 23
@@ -47,8 +46,6 @@ Beatmap beatmap1 = Beatmap(0, "Twinkle Twinkle", 17, 16000, beats1);
 
 Beatmap *beatmaps = {&beatmap1};
 
-// const String BASE_URL = "https://ecourse.cpe.ku.ac.th/exceed15";
-const String BASE_URL = "http://group15.exceed19.online";
 
 String currentState = "MENU";
 String nextState = "MENU";
@@ -60,61 +57,6 @@ int hitCount = 0;
 Beatmap *currentBeatmap = nullptr;
 int currentBeat = 0;
 bool updateLCD = false;
-
-bool POST_final_score(int beatmap_id, int score, int hit, int miss)
-{
-  HTTPClient http;
-  String URL = BASE_URL + "/recent";
-  http.begin(URL);
-  http.addHeader("Content-Type", "application/json");
-  String payload = "{\"beatmap_id\": " + String(beatmap_id) + ", \"score\": " + String(score) + ", \"hit\": " + String(hit) + ", \"miss\": " + String(miss) + "}";
-
-  int responseCode = http.POST(payload);
-  if (responseCode != 200)
-  {
-    Serial.println("Failed to post final score");
-    return false;
-  }
-
-  URL = BASE_URL + "/game-state";
-  http.begin(URL);
-  http.addHeader("Content-Type", "application/json");
-  payload = "{\"game_state\": \"FINISHED\", \"beatmap_id\": " + String(beatmap_id) + "}";
-  responseCode = http.POST(payload);
-  if (responseCode != 200)
-  {
-    Serial.println("Failed to update to finished state");
-    return false;
-  }
-
-  return true;
-}
-
-
-bool GET_game_state(String &nextState)
-{
-  DynamicJsonDocument document(2048);
-  HTTPClient http;
-  const String URL = BASE_URL + "/game-state";
-  http.begin(URL);
-  int responseCode = http.GET();
-  if (responseCode != 200)
-  {
-    Serial.println("Failed to fetch game state");
-    Serial.println("Response code: " + String(responseCode));
-    return false;
-  }
-
-  String payload = http.getString();
-  deserializeJson(document, payload);
-
-  nextState = document["game_state"].as<String>();
-  if (nextState == "PLAYING")
-  {
-    beatmapID = document["beatmap_id"].as<int>();
-  }
-  return true;
-}
 
 
 
@@ -285,7 +227,7 @@ void updateGameState(void *param)
 {
   while (1)
   {
-    if (!GET_game_state(nextState))
+    if (!GET_game_state(nextState, beatmapID))
     {
       continue;
     }
