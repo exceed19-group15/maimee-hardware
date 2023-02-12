@@ -3,11 +3,10 @@
 #include <HTTPClient.h>
 #include <ArduinoJson.h>
 
-#include <Wire.h>
-#include <LiquidCrystal_I2C.h>
 
 #include <Beat.h>
 #include <Beatmap.h>
+#include <LCEEDEE.h>
 
 #define RED 18
 #define RED_SWITCH 23
@@ -21,7 +20,6 @@
 
 #define HIT_OFFSET 600
 
-LiquidCrystal_I2C lcd(0x27, 16, 2);
 
 Beat beats1[17] = {
     Beat(-1, 0, 261),
@@ -45,6 +43,8 @@ Beat beats1[17] = {
 
 Beatmap beatmap1 = Beatmap(0, "Twinkle Twinkle", 17, 16000, beats1);
 
+Beatmap *beatmaps = {&beatmap1};
+
 // const String BASE_URL = "https://ecourse.cpe.ku.ac.th/exceed15";
 const String BASE_URL = "http://group15.exceed19.online";
 
@@ -56,6 +56,7 @@ Beatmap currentBeatmap = Beatmap();
 long startMillis = 0;
 unsigned long lastGameStateFetch = 0;
 int hitCount = 0;
+Beatmap *currentBeatmap = nullptr;
 int currentBeat = 0;
 bool updateLCD = false;
 
@@ -114,31 +115,7 @@ bool GET_game_state(String &nextState)
   return true;
 }
 
-void setup_LCD()
-{
-  lcd.init();
-  lcd.backlight();
-}
 
-void LCD_showMenu()
-{
-  lcd.clear();
-  lcd.setCursor(0, 0);
-  lcd.print("     maimee");
-  lcd.setCursor(0, 1);
-  lcd.print(" Choose a song");
-}
-
-void LCD_showScore(String songName, int hitCount, int noteCount)
-{
-  lcd.clear();
-  lcd.setCursor(0, 0);
-  lcd.print(songName);
-  lcd.setCursor(0, 1);
-  lcd.print("HIT: " + String(hitCount) + "/" + String(noteCount));
-}
-
-Beatmap *beatmap = &beatmap1;
 
 void LCD_update() {
     if (updateLCD)
@@ -150,13 +127,11 @@ void LCD_update() {
       }
       else if (currentState == "PLAYING" || currentState == "FINISHED")
       {
-        LCD_showScore(beatmap->getSongName(), hitCount, beatmap->getNoteCount());
+        LCD_showScore(currentBeatmap->getSongName(), hitCount, currentBeatmap->getNoteCount());
       }
       else if (currentState == "GIVEUP")
       {
-        lcd.clear();
-        lcd.setCursor(0, 0);
-        lcd.print("YOU SUCK");
+        LCD_showGiveup();
       }
     }
     updateLCD = false;
@@ -182,20 +157,20 @@ void gameLoop(void *param)
 
     long currentTimestamp = millis() - startMillis;
 
-    if (currentTimestamp > beatmap->getDuration())
+    if (currentTimestamp > currentBeatmap->getDuration())
     {
       Serial.println(currentTimestamp);
-      int score = (hitCount / (float)beatmap->getNoteCount()) * 100;
-      POST_final_score(beatmapID, score, hitCount, beatmap->getNoteCount() - hitCount);
+      int score = (hitCount / (float)currentBeatmap->getNoteCount()) * 100;
+      POST_final_score(beatmapID, score, hitCount, currentBeatmap->getNoteCount() - hitCount);
       nextState = "FINISHED";
       Serial.println("Finished");
       Serial.println("Hit: " + String(hitCount));
       continue;
     }
 
-    for (int i = currentBeat; i < beatmap->getBeatCount(); i++)
+    for (int i = currentBeat; i < currentBeatmap->getBeatCount(); i++)
     {
-      Beat *beat = beatmap->getBeats() + i;
+      Beat *beat = currentBeatmap->getBeats() + i;
       unsigned int upperBound = beat->getTimestamp() + HIT_OFFSET;
       unsigned int lowerBound = beat->getTimestamp() - HIT_OFFSET;
 
@@ -321,7 +296,8 @@ void updateGameState(void *param)
         startMillis = millis();
         hitCount = 0;
         currentBeat = 0;
-        beatmap1.resetBeats();
+        currentBeatmap = beatmaps[beatmapID - 1];
+        currentBeatmap->reset(); 
       }
       else
       {
@@ -354,7 +330,7 @@ void setup()
   pinMode(BLUE_SWITCH, INPUT);
   pinMode(BUZZER, OUTPUT);
 
-  setup_LCD();
+  LCD_setup();
 
   noTone(BUZZER);
 
