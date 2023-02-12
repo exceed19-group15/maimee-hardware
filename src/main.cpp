@@ -6,6 +6,7 @@
 
 #include <Beat.h>
 #include <Beatmap.h>
+#include <LiquidCrystal_I2C.h>
 #include <LCEEDEE.h>
 
 #define RED 18
@@ -20,6 +21,7 @@
 
 #define HIT_OFFSET 600
 
+LiquidCrystal_I2C lcd(0x27, 16, 2);
 
 Beat beats1[17] = {
     Beat(-1, 0, 261),
@@ -51,11 +53,10 @@ const String BASE_URL = "http://group15.exceed19.online";
 String currentState = "MENU";
 String nextState = "MENU";
 int beatmapID = -1;
-Beatmap currentBeatmap = Beatmap();
-
 long startMillis = 0;
 unsigned long lastGameStateFetch = 0;
 int hitCount = 0;
+
 Beatmap *currentBeatmap = nullptr;
 int currentBeat = 0;
 bool updateLCD = false;
@@ -123,15 +124,15 @@ void LCD_update() {
 
       if (currentState == "MENU")
       {
-        LCD_showMenu();
+        LCD_showMenu(&lcd);
       }
       else if (currentState == "PLAYING" || currentState == "FINISHED")
       {
-        LCD_showScore(currentBeatmap->getSongName(), hitCount, currentBeatmap->getNoteCount());
+        LCD_showScore(&lcd, currentBeatmap->getSongName(), hitCount, currentBeatmap->getNoteCount());
       }
       else if (currentState == "GIVEUP")
       {
-        LCD_showGiveup();
+        LCD_showGiveUp(&lcd);
       }
     }
     updateLCD = false;
@@ -296,8 +297,8 @@ void updateGameState(void *param)
         startMillis = millis();
         hitCount = 0;
         currentBeat = 0;
-        currentBeatmap = beatmaps[beatmapID - 1];
-        currentBeatmap->reset(); 
+        currentBeatmap = &beatmaps[beatmapID - 1];
+        currentBeatmap->resetBeats(); 
       }
       else
       {
@@ -330,7 +331,7 @@ void setup()
   pinMode(BLUE_SWITCH, INPUT);
   pinMode(BUZZER, OUTPUT);
 
-  LCD_setup();
+  LCD_setup(&lcd);
 
   noTone(BUZZER);
 
